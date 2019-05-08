@@ -9,14 +9,12 @@
  *
  */
 
-#include "dji_sdk_demo/hover.h"
-#include "dji_sdk/dji_sdk.h"
 #include <iostream>
 #include <fstream>
 #include <chrono>
 #include <string>
-#include <Eigen/Dense>
-#include "LinearQuadraticRegulator.h"
+#include "dji_sdk/dji_sdk.h"
+#include "dji_sdk_demo/hover.h" // Includes also the KalmanFilter, MCCKalmanFilter and HinfFilter class headers
 
 ros::ServiceClient set_local_pos_reference;
 ros::ServiceClient sdk_ctrl_authority_service;
@@ -29,9 +27,11 @@ uint8_t flight_status = 255;
 uint8_t display_mode = 255;
 uint8_t current_gps_health = 0;
 int num_targets = 0;
-geometry_msgs::PointStamped local_position;
+
 sensor_msgs::NavSatFix current_gps_position;
 sensor_msgs::Imu curr_imu;
+
+geometry_msgs::PointStamped local_position;
 geometry_msgs::Point initial_pos;
 geometry_msgs::PointStamped uwb_pos;
 geometry_msgs::Point prev_pos;
@@ -41,11 +41,6 @@ geometry_msgs::Vector3 rpy;
 //dji_sdk_demo::Pos desired_pos;
 dji_sdk_demo::Pos curr_pos;
 
-int k = 0; // Sampling step
-int n = 12; // Number of states
-int m = 4; // Number of measurements
-int j = 4; // Number of inputs
-int T = 4; // Sliding window size
 float kp = 0.1; // proportional gain P
 float ki = 0.005; // integral gain I
 float kd = 4.5; // derivative gain D
@@ -55,105 +50,87 @@ float max_altitude = 1.5;
 std::ofstream imuAcc;
 std::ofstream imuG;
 std::ofstream imuRPY;
-std::ofstream uwb;
-std::ofstream comm;
-std::ofstream err;
+
+// log files
+std::ofstream position_file;
+std::ofstream orientation_file;
+std::ofstream states_file;
+std::ofstream controls_file;
+std::ofstream gains_file;
 
 ros::Publisher ctrlRollPitchYawHeightPub;
 ros::Publisher plotpos;
 
-using namespace std::chrono;
-high_resolution_clock::time_point t1;
-high_resolution_clock::time_point t2;
-high_resolution_clock::time_point t3;
-high_resolution_clock::time_point t4;
+std::chrono::high_resolution_clock::time_point t1;
+std::chrono::high_resolution_clock::time_point t2;
+std::chrono::high_resolution_clock::time_point t3;
+std::chrono::high_resolution_clock::time_point t4;
 
-Eigen::MatrixXf A(n, n); // System dynamics matrix
-Eigen::MatrixXf B(n, j); // Control input matrix
-Eigen::MatrixXf C(m, n); // Output matrix
-Eigen::MatrixXd Q(n, n); // State penalize matrix
-Eigen::MatrixXd R(j, j); // Input penalize matrix
-Eigen::MatrixXf Qn(n, n); // Process noise covariance
-Eigen::MatrixXf Rn(m, m); // Measurement noise covariance 
-Eigen::MatrixXf P0(n, n); // Estimate error covariance
-Eigen::MatrixXf In(n, n); // Identity matrix
-Eigen::MatrixXf Im(m, m); // Identity matrix
-Eigen::VectorXf x0(n); // Initial states
-Eigen::MatrixXf K(j, n); // Controller gain matrix
-Eigen::MatrixXf A_cl(n, n); // Closed loop matrix
-Eigen::MatrixXf G(j, m); // Gain filter tracking matrix
-Eigen::MatrixXd Adbl(n, n); // System dynamics matrix (double)
-Eigen::MatrixXd Bdbl(n, j); // Control input matrix (double)
-
-x0 << 0,0,0,0,0,0,0,0,0,0,0,0;
-
-// Discrete LTI projectile motion, measuring position only
-A <<  1,0.01,0,0,0,0,0,0,0,0,0,0,
-      0,1,0,0,0,0,0,0,0,0,0,0,
-      0,0,1,0.01,0,0,0,0,0,0,0,0,
-      0,0,0,1,0,0,0,0,0,0,0,0,
-      0,0,0,0,1,0.01,0,0,0,0,0,0,
-      0,0,0,0,0,1,0,0,0,0,0,0,
-      0,0,-0.0004905,-0.000001635,0,0,1,0.01,0,0,0,0,
-      0,0,-0.0981,-0.0004905,0,0,0,1,0,0,0,0,
-      0.0004905,0.000001635,0,0,0,0,0,0,1,0.01,0,0,
-      0.0981,0.0004905,0,0,0,0,0,0,0,1,0,0,
-      0,0,0,0,0,0,0,0,0,0,1,0.01,
-      0,0,0,0,0,0,0,0,0,0,0,1;
-
-B <<  0,0.0006349,0,0,
-      0,0.1269809,0,0,
-      0,0,0.0006349,0,
-      0,0,0.1269809,0,
-      0,0,0,0.00031742,
-      0,0,0,0.063484,
-      0,0,-0.0000000519,0,
-      0,0,-0.00002076,0,
-      0,0.0000000519,0,0,
-      0,0.00002076,0,0,
-      -0.00002083,0,0,0,
-      -0.00417,0,0,0;
-
-C <<  0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0;
-
-Q.setIdentity(n, n);
-R.setIdentity(j, j);
-Q(7,7)=10;
-Q(9,9)=10;
-Q(11,11)=10;
-R(0,0)=0.001;
-K.setZero(j, n);
-
-// For Kalman filter
-In.setIdentity(n, n);
-Im.setIdentity(m,m);
-P0=10*In;
-Qn=5*In;
-Rn=5*Im;
+KalmanFilter kf(n, m);
+// MCCKalmanFilter kf(n, m);
+// HinfFilter kf(n, m);
 
 int main(int argc, char **argv){
-  /* Create and initialize the Kalman Filter*/
-  KalmanFilter kf(n, m);
+  //LQR lqr(n,j);
+
+  x0 << 0,0,0,0,0,0,2.1,0,2.6,0,0.8,0; // remember to update accordingly every experiment
+  // Discrete LTI projectile motion, measuring position only
+  A <<  1,0.01,0,0,0,0,0,0,0,0,0,0,
+        0,1,0,0,0,0,0,0,0,0,0,0,
+        0,0,1,0.01,0,0,0,0,0,0,0,0,
+        0,0,0,1,0,0,0,0,0,0,0,0,
+        0,0,0,0,1,0.01,0,0,0,0,0,0,
+        0,0,0,0,0,1,0,0,0,0,0,0,
+        0,0,-0.0004905,-0.000001635,0,0,1,0.01,0,0,0,0,
+        0,0,-0.0981,-0.0004905,0,0,0,1,0,0,0,0,
+        0.0004905,0.000001635,0,0,0,0,0,0,1,0.01,0,0,
+        0.0981,0.0004905,0,0,0,0,0,0,0,1,0,0,
+        0,0,0,0,0,0,0,0,0,0,1,0.01,
+        0,0,0,0,0,0,0,0,0,0,0,1;
+  B <<  0,0.0006349,0,0,
+        0,0.1269809,0,0,
+        0,0,0.0006349,0,
+        0,0,0.1269809,0,
+        0,0,0,0.00031742,
+        0,0,0,0.063484,
+        0,0,-0.0000000519,0,
+        0,0,-0.00002076,0,
+        0,0.0000000519,0,0,
+        0,0.00002076,0,0,
+        -0.00002083,0,0,0,
+        -0.00417,0,0,0;
+  C <<  0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0;
+  L << 8.77e-13,3.94-14,-5.06e-12,-3.70e-13,-2.49e-13,-8.13e-14,4.94e-13,2.20e-12,3.13e-13,8.33e-14,-92.30,-35.99,
+       7.85,1.43,-6.67e-14,-2.87e-15,-5.36e-16,-4.19e-15,3.85e-14,2.27e-14,2.87,2.33,-3.07e-14,-1.22e-15,
+       -4.72e-14,-2.77e-15,7.85,1.43,-1.57e-16,-7.89e-16,-2.87,-2.33,-2.81e-14,-1.71e-14,1.47e-13,1.12e-14,
+       -2.77e-14,-2.23e-15,-3.20e-14,-5.52e-16,0.96,1.11,3.16e-14,1.18e-14,-2.27e-14,-1.65e-14,1.86e-15,1.23e-15;
+  
+  // LQR weighting matrices
+  Q.setIdentity(n, n);
+  R.setIdentity(j, j);
+  Q(7,7)=10;
+  Q(9,9)=10;
+  Q(11,11)=10;
+  R(0,0)=0.001;
+  K.setZero(j, n);
+  // Kalman filter covariance matrices
+  In.setIdentity(n, n);
+  Im.setIdentity(m,m);
+  P0=10*In;
+  Qn=5*In;
+  Rn=5*Im;
+  // Kalman Filter initialization
   kf.setFixed(A, C, Qn, Rn);
   kf.setInitial(x0, P0);
-
-  /* Create The LQR controller */
-  LQR lqr(n,j);
-  Adbl = A.cast <double> (); // Matrix of floats to double.
-  Bdbl = B.cast <double> (); // Matrix of floats to double.
-  lqr.setFixed(Adbl,Bdbl,Q,R);
-  lqr.solver();
-
-  // Reference tracking gain filter
-  K = lqr.Klqr.cast <float> (); // Matrix of doubles to floats.
-  A_cl = (A-B*K);
+  // Reference tracking
+  A_cl = (A-B*L);
   G = -B.inverse()*A_cl*C.inverse();
-
-  t2 = high_resolution_clock::now();
-  t4 = high_resolution_clock::now();
+  
+  t2 = std::chrono::high_resolution_clock::now();
+  t4 = std::chrono::high_resolution_clock::now();
   ros::init(argc, argv, "demo_local_position_control_node");
   ros::NodeHandle nh;
   // Subscribe to messages from dji_sdk_node
@@ -168,8 +145,6 @@ int main(int argc, char **argv){
 
   //ros::Subscriber initialPosition = nh.subscribe("initial_pos", 1, &initial_pos_callback);
 
-  // Publish the control signal
-
   // Basic services
   sdk_ctrl_authority_service = nh.serviceClient<dji_sdk::SDKControlAuthority>("dji_sdk/sdk_control_authority");
   drone_task_service = nh.serviceClient<dji_sdk::DroneTaskControl>("dji_sdk/drone_task_control");
@@ -181,21 +156,22 @@ int main(int argc, char **argv){
 
   //imuAcc.open("distacc.txt");
   //imuG.open("accels.txt");
-  uwb.open("position.txt");
-  comm.open("attitude.txt");
-  err.open("gains.txt");
-  err << kp << " " << ki << " " << kd << " " << std::endl;
+  position_file.open("position.txt");
+  orientation_file.open("orientation.txt");
+  states_file.open("states.txt");
+  controls_file.open("controls.txt");
+  gains_file.open("gains.txt");
 
-  t1 = high_resolution_clock::now();
-  t2 = high_resolution_clock::now();
+  t1 = std::chrono::high_resolution_clock::now();
+  t2 = std::chrono::high_resolution_clock::now();
   ros::Subscriber uwbPosition = nh.subscribe("uwb_pos", 1, &uwb_position_callback);
 
   ctrlRollPitchYawHeightPub = nh.advertise<sensor_msgs::Joy>("dji_sdk/flight_control_setpoint_rollpitch_yawrate_zposition", 1);
 
   ROS_INFO("M100 taking off!");
   takeoff_result = M100monitoredTakeoff();
-  t2 = high_resolution_clock::now();
-  t4 = high_resolution_clock::now();
+  t2 = std::chrono::high_resolution_clock::now();
+  t4 = std::chrono::high_resolution_clock::now();
   if (takeoff_result){
     printf("READY TO CONTROL \n");
     target_set_state = 1;
@@ -221,7 +197,6 @@ geometry_msgs::Vector3 toEulerAngle(geometry_msgs::Quaternion quat){
 }
 
 void pid_pos_form(){
-  VectorXf u(j); // Control input vector
   u[0] = 0.0; // zero yaw
   u[1] = kp * (target_y - curr_pos.y) + kd * (target_y - curr_pos.y - y_error);
   u[2] = kp * (target_x - curr_pos.x) + kd * (target_x - curr_pos.x - x_error);
@@ -245,15 +220,11 @@ void pid_pos_form(){
   controlmsg.axes.push_back(U4); // yaw
   ctrlRollPitchYawHeightPub.publish(controlmsg);
 
-  comm << pitch << " " << U3 << " " << roll << " " << U2 << std::endl;
-
   x_error = target_x - curr_pos.x;
   y_error = target_y - curr_pos.y;
 }
 
 void pid_vel_form(){
-  VectorXf u(j); // Control input vector
-  
   x_error = target_x - curr_pos.x;
   y_error = target_y - curr_pos.y;
 
@@ -279,7 +250,6 @@ void pid_vel_form(){
   controlmsg.axes.push_back(U1); // total thrust
   controlmsg.axes.push_back(U4); // yaw
   ctrlRollPitchYawHeightPub.publish(controlmsg);
-  comm << pitch << " " << U3 << " " << roll << " " << U2 << std::endl;
 
   x_error2 = x_error1;
   x_error1 = x_error;
@@ -288,31 +258,21 @@ void pid_vel_form(){
 }
 
 void lqg(){
-  VectorXf y(m); // Measurement vector
-  VectorXf u_init(j); // Control input vector
-  VectorXf ref(m); // Reference vector
-
-  if (k==0)
-    u_init << 0,0,0,0;
-
-  k += 1; // sampling step - increases one step every lqg() function call
-
+  printf("\n-------------------------\nLQG control - (sample k = %d)\n-------------------------\n", k);
+  Eigen::VectorXf y(m); // Measurement vector
+  Eigen::VectorXf ref(m); // Reference vector
+  
   ref << target_yaw,target_x,target_y,target_z;
   y << rpy.z, curr_pos.x, curr_pos.y, curr_pos.z;
-
-  if (!u_init){
-    VectorXf u(j); // Control input vector
-    u = u_init;
-    u_init = 1;       
-  }
-
+  
+  // LQR tracking control
+  u << G*ref - L*kf.X;
+  
   // State estimation using Kalman Filter
   kf.predict(u); //Predict phase, if the system is controlled then pass an input vector u as an argument
   kf.correct(y); //Correction phase
 
-  // LQR tracking control
-  u << G*ref - K*kf.X;
-
+  // Bound angles and height for safety and linerized operating point
   if (fabs(u[3]) >= max_altitude)
     U1 = max_altitude;
   else
@@ -327,62 +287,43 @@ void lqg(){
     U3 = u[2];
   U4 = u[0];
 
-  sensor_msgs::Joy controlmsg;
-  controlmsg.axes.push_back(U2); // roll
-  controlmsg.axes.push_back(U3); // pitch
-  controlmsg.axes.push_back(U1); // total thrust
-  controlmsg.axes.push_back(U4); // yaw
-  ctrlRollPitchYawHeightPub.publish(controlmsg);
-  comm << roll << " " << U2 << " " << pitch << " " << U3 << << " " << yaw << " " << U4 << std::endl;
+  // Publish controls to the drone
+  //sensor_msgs::Joy controlmsg;
+  //controlmsg.axes.push_back(U2); // roll
+  //controlmsg.axes.push_back(U3); // pitch
+  //controlmsg.axes.push_back(U1); // total thrust
+  //controlmsg.axes.push_back(U4); // yaw
+  //ctrlRollPitchYawHeightPub.publish(controlmsg);
+
+  std::cout << kf.X << "";
+  printf("Roll: %f\tPitch: %f\tYaw: %f\n", rpy.x, rpy.y, rpy.z); // yaw was multiplied by * 57.29
+  printf("PosX: %f\tPosY: %f\tPosZ: %f\n\n", curr_pos.x, curr_pos.y, curr_pos.z); // yaw was multiplied by * 57.29
+ 
+  orientation_file << rpy.x << "," << rpy.y << "," << rpy.z << std::endl;
+  position_file << curr_pos.x << "," << curr_pos.y << "," << curr_pos.z << std::endl;
+  states_file << kf.X[0]<<","<<kf.X[1]<<","<<kf.X[2]<<","<<kf.X[3]<<","<<kf.X[4]<<","<<kf.X[5]<<","<<kf.X[6]<<","<<kf.X[7]<<","<<kf.X[8]<<","<<kf.X[9]<<","<<kf.X[10]<<","<<kf.X[11] << std::endl;
+  controls_file << U1 << "," << U2 << "," << U3 << "," << U4 << std::endl;
+
+  k += 1; // sampling step
 }
 
 void uwb_position_callback(const dji_sdk_demo::Pos::ConstPtr &msg){
-  t1 = high_resolution_clock::now();
-  duration<double> time_span = duration_cast<duration<double>>(t1 - t2);
-  t2 = high_resolution_clock::now();
   curr_pos = *msg;
-  //ROS_INFO("I heard: [%d]",( posi.nses));
 
   int elapsed_time = ros::Time::now().toNSec(); // - posi.nses;
-  //-1 pitch opposite sign
 
-  printf("Roll: %f\nPitch: %f\nYaw: %f\n", rpy.x, rpy.y, rpy.z); // yaw was multiplied by * 57.29
-  printf("PosX: %f\nPosY: %f\nPosZ: %f\n\n", curr_pos.x, curr_pos.y, curr_pos.z); // yaw was multiplied by * 57.29
-
+  target_set_state = 1; // remember to delete line for normal experiments
   if (target_set_state == 1) {
-    //pid_vel_form();
-    //pid_pos_form(); 
     setTarget(0.0,3.0,4.0,1.2); // target_yaw, target_x, target_y, target_z
-    lqg();
+    lqg();  // pid_vel_form(), pid_pos_form()
     //comm<<_span.count()<<std::endl;
     //elapsed_time=ros::Time::now().toNSec()-elapsed_time+curr_pos.time;
-    uwb << curr_pos.x << " " << curr_pos.y << " " << curr_pos.z << " " << elapsed_time << std::endl;
+    //uwb << curr_pos.x << "," << curr_pos.y << "," << curr_pos.z << "," << elapsed_time << std::endl;
   } 
 }
 
 void imu_callback(const sensor_msgs::Imu::ConstPtr &msg){
   curr_imu = *msg;
-  /*
-    t1 = high_resolution_clock::now();
-    duration<double> time_span = duration_cast<duration<double>>(t1 - t2);
-    t2 = high_resolution_clock::now();
-
-  //  auto duration = duration_cast<microseconds>( t2 - t1 ).count()
-  imuG<<curr_imu.linear_acceleration.x<<" "<<curr_imu.linear_acceleration.y<<" "<<curr_imu.linear_acceleration.z<<" "<<time_span.count()<<std::endl;
-  //imuG<<curr_imu.angular_velocity.x<<" "<<curr_imu.angular_velocity.y<<" "<<curr_imu.angular_velocity.z<<std::endl;
-  xspeed+=((curr_imu.linear_acceleration.x+ax_prev)/2.0)*time_span.count();
-  yspeed+=((curr_imu.linear_acceleration.y+ay_prev)/2.0)*time_span.count();
-
-  dximu+=((xspeed_prev+xspeed)/2.0)*time_span.count();  
-  dyimu+=((yspeed_prev+yspeed)/2.0)*time_span.count(); 
-  imuAcc<<dximu<<" "<<dyimu<<" "<<xspeed<<" "<<yspeed<<std::endl;
-  //imuAcc<<curr_imu.linear_acceleration.x<<" "<<curr_imu.linear_acceleration.y<<" "<<curr_imu.linear_acceleration.z<<" "<<dt<<std::endl;
-  //imuG<<curr_imu.angular_velocity.x<<" "<<curr_imu.angular_velocity.y<<" "<<curr_imu.angular_velocity.z<<std::endl;
-  xspeed_prev=xspeed;
-  yspeed_prev=yspeed;
-  ax_prev=curr_imu.linear_acceleration.x;
-  ay_prev=curr_imu.linear_acceleration.y;
-  */
 }
 
 void local_position_callback(const geometry_msgs::PointStamped::ConstPtr &msg){
@@ -483,4 +424,177 @@ bool M100monitoredTakeoff(){
     ros::spinOnce();
   }
   return true;
+}
+
+using namespace std;
+// Constructor:
+KalmanFilter::KalmanFilter(int _n,  int _m) {
+	n = _n;
+	m = _m;
+}
+
+// Set Fixed Matrix
+void KalmanFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R ){
+	A = _A;
+	C = _C;
+	Q = _Q;
+	R = _R;
+	I = I.Identity(n, n);
+}
+
+// Set Fixed Matrix
+void KalmanFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _B, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R){
+	A = _A;
+	B = _B;
+	C = _C;
+	Q = _Q;
+	R = _R;
+	I = I.Identity(n, n);
+}
+
+// Set Initial Matrix
+void KalmanFilter::setInitial( Eigen::VectorXf _X0, Eigen::MatrixXf _P0 ){
+	X0 = _X0;
+	P0 = _P0;
+}
+
+// Do prediction based of physical system (No external input)
+void KalmanFilter::predict(void){
+  X = (A * X0);
+  P = (A * P0 * A.transpose()) + Q;
+}
+
+// Do prediction based of physical system (with external input)  U: Control vector
+void KalmanFilter::predict( Eigen::VectorXf U ){
+  X = (A * X0) + (B * U);
+  P = (A * P0 * A.transpose()) + Q;
+}
+
+// Correct the prediction, using mesaurement Y: mesaure vector
+void KalmanFilter::correct ( Eigen::VectorXf Y ) {
+  K = ( P * C.transpose() ) * ( C * P * C.transpose() + R).inverse();
+  X = X + K*(Y - C * X);
+  P = (I - K * C) * P;
+  X0 = X;
+  P0 = P;
+}
+
+// Constructor:
+MCCKalmanFilter::MCCKalmanFilter(int _n,  int _m, int _sigma) {
+	n = _n;
+	m = _m;
+  sigma = _sigma;
+}
+
+// Set Fixed Matrix
+void MCCKalmanFilter::setFixed( MatrixXf _A, MatrixXf _C, MatrixXf _Q, MatrixXf _R ){
+	A = _A;
+	C = _C;
+	Q = _Q;
+	R = _R;
+	I = I.Identity(n, n);
+}
+
+// Set Fixed Matrix
+void MCCKalmanFilter::setFixed( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, MatrixXf _R){
+	A = _A;
+	B = _B;
+	C = _C;
+	Q = _Q;
+	R = _R;
+	I = I.Identity(n, n);
+}
+
+// Set Initial Matrix
+void MCCKalmanFilter::setInitial( VectorXf _X0, MatrixXf _P0 ){
+	X0 = _X0;
+	P0 = _P0;
+}
+
+// Do prediction based of physical system (No external input)	 
+void MCCKalmanFilter::predict(void){
+  X = (A * X0);
+  P = (A * P0 * A.transpose()) + Q;
+}
+
+// Do prediction based of physical system (with external input) U: Control vector	 
+void MCCKalmanFilter::predict( VectorXf U ){
+  X = (A * X0) + (B * U);
+  P = (A * P0 * A.transpose()) + Q;
+}
+
+// Correct the prediction, using mesaurement  Y: mesaure vector
+void MCCKalmanFilter::correct ( VectorXf Y ) {
+  R_inv = R.inverse();
+  cov_P = P;
+  innov_num = Y - C*X_old;
+  innov_den = X_old - A*X;
+  norm_num = norm(innov_num);
+  norm_den = norm(innov_den);
+  // norm_innov = sqrt((innov).'*invers_R*(innov));
+  Gkernel = exp(-(pow(norm_num,2)) /(2*pow(sigma,2)))/exp(-(pow(norm_den,2))/(2*pow(sigma,2)));
+  K = (cov_P.inverse() + Gkernel * C.transpose()*R_inv*C).inverse() * Gkernel * C.transpose()*R_inv;
+  X = X + K *(innov_num);
+  P = (I - K*C) * cov_P * (I - K*C).transpose() + (K*R*K.transpose());
+
+  X0 = X;
+  P0 = P;
+}
+
+// Constructor:
+HinfFilter::HinfFilter(int _n,  int _m, int _sigma) {
+	n = _n;
+	m = _m;
+  sigma = _sigma;
+}
+
+// Set Fixed Matrix
+void HinfFilter::setFixed( MatrixXf _A, MatrixXf _C, MatrixXf _Q, MatrixXf _R ){
+	A = _A;
+	C = _C;
+	Q = _Q;
+	R = _R;
+	I = I.Identity(n, n);
+}
+
+// Set Fixed Matrix
+void HinfFilter::setFixed( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, MatrixXf _R){
+	A = _A;
+	B = _B;
+	C = _C;
+	Q = _Q;
+	R = _R;
+	I = I.Identity(n, n);
+}
+
+// Set Initial Matrix 
+void HinfFilter::setInitial( VectorXf _X0, MatrixXf _P0 ){
+	X0 = _X0;
+	P0 = _P0;
+}
+
+// Do prediction based of physical system (No external input)	 
+void HinfFilter::predict(void){
+  X = (A * X0);
+  P = (A * P0 * A.transpose()) + Q;
+}
+
+// Do prediction based of physical system (with external input)  U: Control vector	 
+void HinfFilter::predict( VectorXf U ){
+  X = (A * X0) + (B * U);
+  P = (A * P0 * A.transpose()) + Q;
+}
+
+// Correct the prediction, using mesaurement  Y: mesaure vector
+void HinfFilter::correct ( VectorXf Y ) {
+  R_inv = R.inverse();
+  P_old = P;
+  innov_num = Y - C*X;
+  norm_num = norm(innov_num);
+  K = P_old * (I-theta*P_old+C.transpose()*R_inv*C*P_old).inverse()*C.tranpose()*R_inv;
+  X = X + K *(innov_num);
+  P = P_old * (I - theta*P_old + C.transpose() * R_inv * C * P_old).inverse();
+
+  X0 = X;
+  P0 = P;
 }
