@@ -177,107 +177,82 @@ class KalmanFilter {
 };
 
 class MCCKalmanFilter {
-
 	public:
-
 		/* Problem Dimension */
 		int n; //State vector dimension
 		int m; //Control vector (input) dimension (if there is not input, set to zero)
 		int sigma;
-
 		/* Fixed Matrix */
-		MatrixXf A; //System dynamics matrix
-		MatrixXf B; //Control matrix 
-		MatrixXf C; //Mesaurement Adaptation matrix
-		MatrixXf Q; //Process Noise Covariance matrix
-		MatrixXf R; //Measurement Noise Covariance matrix
-		MatrixXf I; //Identity matrix
-
+		Eigen::MatrixXf A; //System dynamics matrix
+		Eigen::MatrixXf B; //Control matrix 
+		Eigen::MatrixXf C; //Mesaurement Adaptation matrix
+		Eigen::MatrixXf Q; //Process Noise Covariance matrix
+		Eigen::MatrixXf R; //Measurement Noise Covariance matrix
+		Eigen::MatrixXf I; //Identity matrix
 		/* Variable Matrix */
-		VectorXf X; //(Current) State vector
-		MatrixXf P; //State Covariance
-		MatrixXf K; //Kalman Gain matrix
-
+		Eigen::VectorXf X; //(Current) State vector
+		Eigen::MatrixXf P; //State Covariance
+		Eigen::MatrixXf K; //Kalman Gain matrix
 		/* Inizial Value */
-		VectorXf X0; //Initial State vector
-		MatrixXf P0; //Initial State Covariance matrix
-		
+		Eigen::VectorXf X0; //Initial State vector
+		Eigen::MatrixXf P0; //Initial State Covariance matrix
 		/* 
 		* Constructor 
 		* _n: state vector dimension
 		* _m: control vector dimension (if there is not input, set to zero)
 		*/
 		MCCKalmanFilter(int _n,  int _m, int _sigma);
-
 		/* Set Fixed Matrix (NO INPUT) */
-		void setFixed ( MatrixXf _A, MatrixXf _C, MatrixXf _Q, MatrixXf _R );
-
+		void setFixed ( Eigen::MatrixXf _A, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R );
 		/* Set Fixed Matrix (WITH INPUT) */
-		void setFixed ( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, MatrixXf _R );
-
+		void setFixed ( Eigen::MatrixXf _A, Eigen::MatrixXf _B, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R );
 		/* Set Initial Value */
-		void setInitial( VectorXf _X0, MatrixXf _P0 );
-		
+		void setInitial( Eigen::VectorXf _X0, Eigen::MatrixXf _P0 );
 		/* Do prediction (NO INPUT) */
 		void predict ( void );
-
 		/* Do prediction (INPUT) */
-		void predict ( VectorXf U );
-
+		void predict ( Eigen::VectorXf U );
 		/* Do correction */
-		void correct ( VectorXf Y );
+		void correct ( Eigen::VectorXf Y );
 
 };
 
 class HinfFilter {
-
 	public:
-
 		/* Problem Dimension */
 		int n; //State vector dimension
 		int m; //Control vector (input) dimension (if there is not input, set to zero)
 		int theta;
-
 		/* Fixed Matrix */
-		MatrixXf A; //System dynamics matrix
-		MatrixXf B; //Control matrix 
-		MatrixXf C; //Mesaurement Adaptation matrix
-		MatrixXf Q; //Process Noise Covariance matrix
-		MatrixXf R; //Measurement Noise Covariance matrix
-		MatrixXf I; //Identity matrix
-
+		Eigen::MatrixXf A; //System dynamics matrix
+		Eigen::MatrixXf B; //Control matrix 
+		Eigen::MatrixXf C; //Mesaurement Adaptation matrix
+		Eigen::MatrixXf Q; //Process Noise Covariance matrix
+		Eigen::MatrixXf R; //Measurement Noise Covariance matrix
+		Eigen::MatrixXf I; //Identity matrix
 		/* Variable Matrix */
-		VectorXf X; //(Current) State vector
-		MatrixXf P; //State Covariance
-		MatrixXf K; //Kalman Gain matrix
-
+		Eigen::VectorXf X; //(Current) State vector
+		Eigen::MatrixXf P; //State Covariance
+		Eigen::MatrixXf K; //Kalman Gain matrix
 		/* Inizial Value */
-		VectorXf X0; //Initial State vector
-		MatrixXf P0; //Initial State Covariance matrix
-		
+		Eigen::VectorXf X0; //Initial State vector
+		Eigen::MatrixXf P0; //Initial State Covariance matrix
 		/* 
 		* Constructor 
 		* _n: state vector dimension
 		* _m: control vector dimension (if there is not input, set to zero)
 		*/
 		HinfFilter(int _n,  int _m, int _sigma);
-
 		/* Set Fixed Matrix (NO INPUT) */
-		void setFixed ( MatrixXf _A, MatrixXf _C, MatrixXf _Q, MatrixXf _R );
-
+		void setFixed ( Eigen::MatrixXf _A, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R );
 		/* Set Fixed Matrix (WITH INPUT) */
-		void setFixed ( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, MatrixXf _R );
-
+		void setFixed ( Eigen::MatrixXf _A, Eigen::MatrixXf _B, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R );
 		/* Set Initial Value */
-		void setInitial( VectorXf _X0, MatrixXf _P0 );
-		
+		void setInitial( Eigen::VectorXf _X0, Eigen::MatrixXf _P0 );
 		/* Do prediction (NO INPUT) */
 		void predict ( void );
-
 		/* Do prediction (INPUT) */
-		void predict ( VectorXf U );
-
+		void predict ( Eigen::VectorXf U );
 		/* Do correction */
-		void correct ( VectorXf Y );
-
+		void correct ( Eigen::VectorXf Y );
 };

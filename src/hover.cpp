@@ -115,7 +115,6 @@ int main(int argc, char **argv){
   Q(9,9)=10;
   Q(11,11)=10;
   R(0,0)=0.001;
-  K.setZero(j, n);
   // Kalman filter covariance matrices
   In.setIdentity(n, n);
   Im.setIdentity(m,m);
@@ -432,7 +431,6 @@ KalmanFilter::KalmanFilter(int _n,  int _m) {
 	n = _n;
 	m = _m;
 }
-
 // Set Fixed Matrix
 void KalmanFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R ){
 	A = _A;
@@ -441,7 +439,6 @@ void KalmanFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _C, Eigen::Matr
 	R = _R;
 	I = I.Identity(n, n);
 }
-
 // Set Fixed Matrix
 void KalmanFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _B, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R){
 	A = _A;
@@ -451,25 +448,21 @@ void KalmanFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _B, Eigen::Matr
 	R = _R;
 	I = I.Identity(n, n);
 }
-
 // Set Initial Matrix
 void KalmanFilter::setInitial( Eigen::VectorXf _X0, Eigen::MatrixXf _P0 ){
 	X0 = _X0;
 	P0 = _P0;
 }
-
 // Do prediction based of physical system (No external input)
 void KalmanFilter::predict(void){
   X = (A * X0);
   P = (A * P0 * A.transpose()) + Q;
 }
-
 // Do prediction based of physical system (with external input)  U: Control vector
 void KalmanFilter::predict( Eigen::VectorXf U ){
   X = (A * X0) + (B * U);
   P = (A * P0 * A.transpose()) + Q;
 }
-
 // Correct the prediction, using mesaurement Y: mesaure vector
 void KalmanFilter::correct ( Eigen::VectorXf Y ) {
   K = ( P * C.transpose() ) * ( C * P * C.transpose() + R).inverse();
@@ -485,18 +478,16 @@ MCCKalmanFilter::MCCKalmanFilter(int _n,  int _m, int _sigma) {
 	m = _m;
   sigma = _sigma;
 }
-
 // Set Fixed Matrix
-void MCCKalmanFilter::setFixed( MatrixXf _A, MatrixXf _C, MatrixXf _Q, MatrixXf _R ){
+void MCCKalmanFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R ){
 	A = _A;
 	C = _C;
 	Q = _Q;
 	R = _R;
 	I = I.Identity(n, n);
 }
-
 // Set Fixed Matrix
-void MCCKalmanFilter::setFixed( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, MatrixXf _R){
+void MCCKalmanFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _B, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R){
 	A = _A;
 	B = _B;
 	C = _C;
@@ -504,61 +495,51 @@ void MCCKalmanFilter::setFixed( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf 
 	R = _R;
 	I = I.Identity(n, n);
 }
-
 // Set Initial Matrix
-void MCCKalmanFilter::setInitial( VectorXf _X0, MatrixXf _P0 ){
+void MCCKalmanFilter::setInitial( Eigen::VectorXf _X0, Eigen::MatrixXf _P0 ){
 	X0 = _X0;
 	P0 = _P0;
 }
-
 // Do prediction based of physical system (No external input)	 
 void MCCKalmanFilter::predict(void){
   X = (A * X0);
   P = (A * P0 * A.transpose()) + Q;
 }
-
 // Do prediction based of physical system (with external input) U: Control vector	 
-void MCCKalmanFilter::predict( VectorXf U ){
+void MCCKalmanFilter::predict( Eigen::VectorXf U ){
   X = (A * X0) + (B * U);
   P = (A * P0 * A.transpose()) + Q;
 }
-
 // Correct the prediction, using mesaurement  Y: mesaure vector
-void MCCKalmanFilter::correct ( VectorXf Y ) {
-  R_inv = R.inverse();
-  cov_P = P;
-  innov_num = Y - C*X_old;
-  innov_den = X_old - A*X;
-  norm_num = norm(innov_num);
-  norm_den = norm(innov_den);
+void MCCKalmanFilter::correct ( Eigen::VectorXf Y ) {
   // norm_innov = sqrt((innov).'*invers_R*(innov));
-  Gkernel = exp(-(pow(norm_num,2)) /(2*pow(sigma,2)))/exp(-(pow(norm_den,2))/(2*pow(sigma,2)));
-  K = (cov_P.inverse() + Gkernel * C.transpose()*R_inv*C).inverse() * Gkernel * C.transpose()*R_inv;
-  X = X + K *(innov_num);
-  P = (I - K*C) * cov_P * (I - K*C).transpose() + (K*R*K.transpose());
-
+  // Gkernel = exp(-(pow(norm(Y - C*X),2)) /(2*pow(sigma,2)))/exp(-(pow(norm(X - A*X),2))/(2*pow(sigma,2)));
+  Eigen::VectorXf innov(6);
+  Eigen::VectorXf innovx(12);
+  innov = Y-C*X;
+  innovx = X-A*X;
+  K = (P.inverse() + exp(-(pow(innov.norm(),2)) /(2*pow(sigma,2)))/exp(-(pow(innovx.norm(),2))/(2*pow(sigma,2))) * C.transpose()*R.inverse()*C).inverse() * exp(-(pow(innov.norm(),2)) /(2*pow(sigma,2)))/exp(-(pow(innovx.norm(),2))/(2*pow(sigma,2))) * C.transpose()*R.inverse();  X = X + K *(Y - C*X);
+  P = (I - K*C) * P * (I - K*C).transpose() + (K*R*K.transpose());
   X0 = X;
   P0 = P;
 }
 
 // Constructor:
-HinfFilter::HinfFilter(int _n,  int _m, int _sigma) {
+HinfFilter::HinfFilter(int _n,  int _m, int _theta) {
 	n = _n;
 	m = _m;
-  sigma = _sigma;
+  theta = _theta;
 }
-
 // Set Fixed Matrix
-void HinfFilter::setFixed( MatrixXf _A, MatrixXf _C, MatrixXf _Q, MatrixXf _R ){
+void HinfFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R ){
 	A = _A;
 	C = _C;
 	Q = _Q;
 	R = _R;
 	I = I.Identity(n, n);
 }
-
 // Set Fixed Matrix
-void HinfFilter::setFixed( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, MatrixXf _R){
+void HinfFilter::setFixed( Eigen::MatrixXf _A, Eigen::MatrixXf _B, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R){
 	A = _A;
 	B = _B;
 	C = _C;
@@ -566,35 +547,26 @@ void HinfFilter::setFixed( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, M
 	R = _R;
 	I = I.Identity(n, n);
 }
-
 // Set Initial Matrix 
-void HinfFilter::setInitial( VectorXf _X0, MatrixXf _P0 ){
+void HinfFilter::setInitial( Eigen::VectorXf _X0, Eigen::MatrixXf _P0 ){
 	X0 = _X0;
 	P0 = _P0;
 }
-
 // Do prediction based of physical system (No external input)	 
 void HinfFilter::predict(void){
   X = (A * X0);
   P = (A * P0 * A.transpose()) + Q;
 }
-
 // Do prediction based of physical system (with external input)  U: Control vector	 
-void HinfFilter::predict( VectorXf U ){
+void HinfFilter::predict( Eigen::VectorXf U ){
   X = (A * X0) + (B * U);
   P = (A * P0 * A.transpose()) + Q;
 }
-
 // Correct the prediction, using mesaurement  Y: mesaure vector
-void HinfFilter::correct ( VectorXf Y ) {
-  R_inv = R.inverse();
-  P_old = P;
-  innov_num = Y - C*X;
-  norm_num = norm(innov_num);
-  K = P_old * (I-theta*P_old+C.transpose()*R_inv*C*P_old).inverse()*C.tranpose()*R_inv;
-  X = X + K *(innov_num);
-  P = P_old * (I - theta*P_old + C.transpose() * R_inv * C * P_old).inverse();
-
+void HinfFilter::correct ( Eigen::VectorXf Y ) {
+  K = P * (I-theta*P+C.transpose()*R.inverse()*C*P).inverse()*C.transpose()*R.inverse();
+  X = X + K * (Y - C*X);
+  P = P * (I - theta*P + C.transpose() * R.inverse() * C * P).inverse();
   X0 = X;
   P0 = P;
 }
