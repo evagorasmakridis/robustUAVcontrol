@@ -14,27 +14,39 @@
 
 #endif //PROJECT_DEMO_LOCAL_POSITION_CONTROL_H
 
-#include <dji_sdk/SetLocalPosRef.h>
 #include <ros/ros.h>
+#include <dji_sdk/SetLocalPosRef.h>
 #include <dji_sdk_demo/Pos.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/QuaternionStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
+#include <geometry_msgs/Vector3.h>
 #include <std_msgs/UInt8.h>
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/NavSatFix.h>
-#include <geometry_msgs/Vector3.h>
 //DJI SDK includes
 #include <dji_sdk/DroneTaskControl.h>
 #include <dji_sdk/SDKControlAuthority.h>
 #include <dji_sdk/QueryDroneVersion.h>
 #include <tf/tf.h>
+#include <eigen3/Eigen/Eigen>
+#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Core>
+#include <eigen3/Eigen/Eigenvalues>
+#include <assert.h>
+#include <complex>
 #define C_EARTH (double)6378137.0
 #define C_PI (double)3.141592653589793
 #define DEG2RAD(DEG) ((DEG) * ((C_PI) / (180.0)))
 
 bool set_local_position();
+
+int k = 0; // Sampling step
+int n = 12; // Number of states
+int m = 4; // Number of measurements
+int j = 4; // Number of inputs
+int T = 4; // Sliding window size
 
 float target_x;
 float target_y;
@@ -71,6 +83,24 @@ void setTarget(float yaw, float x, float y, float z){
   target_z = z;
 }
 
+Eigen::MatrixXf A(n, n); // System dynamics matrix
+Eigen::MatrixXf B(n, j); // Control input matrix
+Eigen::MatrixXf C(m, n); // Output matrix
+Eigen::MatrixXd Q(n, n); // State penalize matrix
+Eigen::MatrixXd R(j, j); // Input penalize matrix
+Eigen::MatrixXf Qn(n, n); // Process noise covariance
+Eigen::MatrixXf Rn(m, m); // Measurement noise covariance 
+Eigen::MatrixXf P0(n, n); // Estimate error covariance
+Eigen::MatrixXf In(n, n); // Identity matrix
+Eigen::MatrixXf Im(m, m); // Identity matrix
+Eigen::MatrixXf L(j, n); // LQR control gain matrix
+Eigen::MatrixXf A_cl(n, n); // Closed loop matrix
+Eigen::MatrixXf G(j, m); // Gain filter tracking matrix
+Eigen::MatrixXd Adbl(n, n); // System dynamics matrix (double)
+Eigen::MatrixXd Bdbl(n, j); // Control input matrix (double)
+Eigen::VectorXf x0(n); // Initial states
+Eigen::VectorXf u(j); // Control input vector
+
 void pid_vel_form(); 
 void pid_pos_form();
 void lqg();
@@ -106,3 +136,148 @@ bool monitoredTakeoff();
 bool M100monitoredTakeoff();
 
 void local_position_ctrl();
+
+class KalmanFilter {
+	public:
+		/* Problem Dimension */
+		int n; //State vector dimension
+		int m; //Control vector (input) dimension (if there is not input, set to zero)
+		/* Fixed Matrix */
+		Eigen::MatrixXf A; //System dynamics matrix
+		Eigen::MatrixXf B; //Control matrix 
+		Eigen::MatrixXf C; //Mesaurement Adaptation matrix
+		Eigen::MatrixXf Q; //Process Noise Covariance matrix
+		Eigen::MatrixXf R; //Measurement Noise Covariance matrix
+		Eigen::MatrixXf I; //Identity matrix
+		/* Variable Matrix */
+		Eigen::VectorXf X; //(Current) State vector
+		Eigen::MatrixXf P; //State Covariance
+		Eigen::MatrixXf K; //Kalman Gain matrix
+		/* Inizial Value */
+		Eigen::VectorXf X0; //Initial State vector
+		Eigen::MatrixXf P0; //Initial State Covariance matrix
+		/* 
+		* Constructor 
+		* _n: state vector dimension
+		* _m: control vector dimension (if there is not input, set to zero)
+		*/
+		KalmanFilter(int _n,  int _m);
+		/* Set Fixed Matrix (NO INPUT) */
+		void setFixed ( Eigen::MatrixXf _A, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R );
+		/* Set Fixed Matrix (WITH INPUT) */
+		void setFixed ( Eigen::MatrixXf _A, Eigen::MatrixXf _B, Eigen::MatrixXf _C, Eigen::MatrixXf _Q, Eigen::MatrixXf _R );
+		/* Set Initial Value */
+		void setInitial( Eigen::VectorXf _X0, Eigen::MatrixXf _P0 );
+		/* Do prediction (NO INPUT) */
+		void predict ( void );
+		/* Do prediction (INPUT) */
+		void predict ( Eigen::VectorXf U );
+		/* Do correction */
+		void correct ( Eigen::VectorXf Y );
+};
+
+class MCCKalmanFilter {
+
+	public:
+
+		/* Problem Dimension */
+		int n; //State vector dimension
+		int m; //Control vector (input) dimension (if there is not input, set to zero)
+		int sigma;
+
+		/* Fixed Matrix */
+		MatrixXf A; //System dynamics matrix
+		MatrixXf B; //Control matrix 
+		MatrixXf C; //Mesaurement Adaptation matrix
+		MatrixXf Q; //Process Noise Covariance matrix
+		MatrixXf R; //Measurement Noise Covariance matrix
+		MatrixXf I; //Identity matrix
+
+		/* Variable Matrix */
+		VectorXf X; //(Current) State vector
+		MatrixXf P; //State Covariance
+		MatrixXf K; //Kalman Gain matrix
+
+		/* Inizial Value */
+		VectorXf X0; //Initial State vector
+		MatrixXf P0; //Initial State Covariance matrix
+		
+		/* 
+		* Constructor 
+		* _n: state vector dimension
+		* _m: control vector dimension (if there is not input, set to zero)
+		*/
+		MCCKalmanFilter(int _n,  int _m, int _sigma);
+
+		/* Set Fixed Matrix (NO INPUT) */
+		void setFixed ( MatrixXf _A, MatrixXf _C, MatrixXf _Q, MatrixXf _R );
+
+		/* Set Fixed Matrix (WITH INPUT) */
+		void setFixed ( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, MatrixXf _R );
+
+		/* Set Initial Value */
+		void setInitial( VectorXf _X0, MatrixXf _P0 );
+		
+		/* Do prediction (NO INPUT) */
+		void predict ( void );
+
+		/* Do prediction (INPUT) */
+		void predict ( VectorXf U );
+
+		/* Do correction */
+		void correct ( VectorXf Y );
+
+};
+
+class HinfFilter {
+
+	public:
+
+		/* Problem Dimension */
+		int n; //State vector dimension
+		int m; //Control vector (input) dimension (if there is not input, set to zero)
+		int theta;
+
+		/* Fixed Matrix */
+		MatrixXf A; //System dynamics matrix
+		MatrixXf B; //Control matrix 
+		MatrixXf C; //Mesaurement Adaptation matrix
+		MatrixXf Q; //Process Noise Covariance matrix
+		MatrixXf R; //Measurement Noise Covariance matrix
+		MatrixXf I; //Identity matrix
+
+		/* Variable Matrix */
+		VectorXf X; //(Current) State vector
+		MatrixXf P; //State Covariance
+		MatrixXf K; //Kalman Gain matrix
+
+		/* Inizial Value */
+		VectorXf X0; //Initial State vector
+		MatrixXf P0; //Initial State Covariance matrix
+		
+		/* 
+		* Constructor 
+		* _n: state vector dimension
+		* _m: control vector dimension (if there is not input, set to zero)
+		*/
+		HinfFilter(int _n,  int _m, int _sigma);
+
+		/* Set Fixed Matrix (NO INPUT) */
+		void setFixed ( MatrixXf _A, MatrixXf _C, MatrixXf _Q, MatrixXf _R );
+
+		/* Set Fixed Matrix (WITH INPUT) */
+		void setFixed ( MatrixXf _A, MatrixXf _B, MatrixXf _C, MatrixXf _Q, MatrixXf _R );
+
+		/* Set Initial Value */
+		void setInitial( VectorXf _X0, MatrixXf _P0 );
+		
+		/* Do prediction (NO INPUT) */
+		void predict ( void );
+
+		/* Do prediction (INPUT) */
+		void predict ( VectorXf U );
+
+		/* Do correction */
+		void correct ( VectorXf Y );
+
+};
