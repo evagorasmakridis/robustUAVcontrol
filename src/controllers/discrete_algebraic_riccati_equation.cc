@@ -378,27 +378,22 @@ Eigen::MatrixXd DiscreteAlgebraicRiccatiEquation(
 
   Eigen::MatrixXd M(2 * n, 2 * n), L(2 * n, 2 * n);
   M << A, Eigen::MatrixXd::Zero(n, n), -Q, Eigen::MatrixXd::Identity(n, n);
-  L << Eigen::MatrixXd::Identity(n, n), B * R.inverse() * B.transpose(),
-      Eigen::MatrixXd::Zero(n, n), A.transpose();
+  L << Eigen::MatrixXd::Identity(n, n), B * R.inverse() * B.transpose(), Eigen::MatrixXd::Zero(n, n), A.transpose();
 
   // QZ decomposition of M and L
   // QMZ = S, QLZ = T
   // where Q and Z are real orthogonal matrixes
   // T is upper-triangular matrix, and S is upper quasi-triangular matrix
   Eigen::RealQZ<Eigen::MatrixXd> qz(2 * n);
-  qz.compute(M, L);  // M = Q S Z,  L = Q T Z (Q and Z computed by Eigen package
-                     // are adjoints of Q and Z above)
-  Eigen::MatrixXd S = qz.matrixS(), T = qz.matrixT(),
-                  Z = qz.matrixZ().adjoint();
+  qz.compute(M, L);  // M = Q S Z,  L = Q T Z (Q and Z computed by Eigen package are adjoints of Q and Z above)
+  Eigen::MatrixXd S = qz.matrixS(), T = qz.matrixT(), Z = qz.matrixZ().adjoint();
 
   // Reorder the generalized eigenvalues of (S,T).
   Eigen::MatrixXd Z2 = Eigen::MatrixXd::Identity(2 * n, 2 * n);
   reorder_eigen(S, T, Z2);
   Z = (Z * Z2).eval();
 
-  // The first n columns of Z is ( U1 ) .
-  //                             ( U2 )
-  //            -1
+  // The first n columns of Z is [( U1 )( U2 )]^T  -1
   // X = U2 * U1   is a solution of the discrete time Riccati equation.
   Eigen::MatrixXd U1 = Z.block(0, 0, n, n), U2 = Z.block(n, 0, n, n);
   Eigen::MatrixXd X = U2 * U1.inverse();
