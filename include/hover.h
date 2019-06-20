@@ -13,97 +13,99 @@
 #define PROJECT_DEMO_LOCAL_POSITION_CONTROL_H
 
 #endif //PROJECT_DEMO_LOCAL_POSITION_CONTROL_H
-
-#include <ros/ros.h>
 #include <dji_sdk/SetLocalPosRef.h>
+#include <ros/ros.h>
 #include <dji_sdk_demo/Pos.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/QuaternionStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
-#include <geometry_msgs/Vector3.h>
 #include <std_msgs/UInt8.h>
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/NavSatFix.h>
+#include <geometry_msgs/Vector3.h>
 //DJI SDK includes
 #include <dji_sdk/DroneTaskControl.h>
 #include <dji_sdk/SDKControlAuthority.h>
 #include <dji_sdk/QueryDroneVersion.h>
 #include <tf/tf.h>
+
 #include <eigen3/Eigen/Eigen>
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Eigenvalues>
 #include <assert.h>
 #include <complex>
+#include <string>
+#include <iostream>
+#include <fstream>
+
 #define C_EARTH (double)6378137.0
 #define C_PI (double)3.141592653589793
 #define DEG2RAD(DEG) ((DEG) * ((C_PI) / (180.0)))
 
+sensor_msgs::NavSatFix current_gps_position;
+sensor_msgs::Imu curr_imu;
+geometry_msgs::PointStamped local_position;
+geometry_msgs::Point initial_pos;
+geometry_msgs::PointStamped uwb_pos;
+geometry_msgs::Point prev_pos;
+geometry_msgs::Quaternion current_atti;
+geometry_msgs::Vector3 rpy;
+dji_sdk_demo::Pos curr_pos;
+
 bool set_local_position();
 
+int target_set_state = 0;
+
 int k = 0; // Sampling step
-int n = 12; // Number of states
+int n = 8; // Number of states
 int m = 4; // Number of measurements
-int j = 4; // Number of inputs
-int T = 4; // Sliding window size
+int j = 2; // Number of inputs
+int T = 2; // Sliding window size (samples)
+int sigma = 100; // kernel size mcckf
 
 float target_x;
 float target_y;
 float target_z;
-float target_yaw;
-int target_set_state = 0;
-float yawinRad;
-float rollinRad;
-float pitchinRad;
+float target_psi;
 
-float dx_error=0;
-float dy_error=0;
-
-float x_error=0;  // error at k   time
-float x_error1=0; // error at k-1 time
-float x_error2=0; // error at k-2 time
-float y_error=0;  // error at k   time
-float y_error1=0; // error at k-1 time
-float y_error2=0; // error at k-2 time
+float x_error=0;
+float y_error=0;
 
 // control inputs
-float U1 = 0; // total thrust
-float U2 = 0; // roll
-float U3 = 0; // pitch
-float U4 = 0; // yaw
+float roll_cmd = 0;
+float pitch_cmd = 0;
+float yaw_cmd = 0;
+float z_cmd = 0;
 
 double dt,dt1;
 ros::Time start_, end_,s1,e1;
 
-void setTarget(float yaw, float x, float y, float z){
-  target_yaw = yaw;
-  target_x = x;
-  target_y = y;
-  target_z = z;
-}
-
 Eigen::MatrixXf A(n, n); // System dynamics matrix
 Eigen::MatrixXf B(n, j); // Control input matrix
 Eigen::MatrixXf C(m, n); // Output matrix
-Eigen::MatrixXd Q(n, n); // State penalize matrix
-Eigen::MatrixXd R(j, j); // Input penalize matrix
+Eigen::MatrixXf Cc(j, n); // Control output matrix
+//Eigen::MatrixXd Q(n, n); // State penalize matrix
+//Eigen::MatrixXd R(j, j); // Input penalize matrix
 Eigen::MatrixXf Qn(n, n); // Process noise covariance
-Eigen::MatrixXf Rn(m, m); // Measurement noise covariance 
+Eigen::MatrixXf Rn(m, m); // Measurement noise covariance
 Eigen::MatrixXf P0(n, n); // Estimate error covariance
+Eigen::MatrixXf SW(m,T); // Sliding window measurement noise error covariance
 Eigen::MatrixXf In(n, n); // Identity matrix
 Eigen::MatrixXf Im(m, m); // Identity matrix
 Eigen::MatrixXf L(j, n); // LQR control gain matrix
-Eigen::MatrixXf A_cl(n, n); // Closed loop matrix
-Eigen::MatrixXf G(j, m); // Gain filter tracking matrix
-Eigen::MatrixXd Adbl(n, n); // System dynamics matrix (double)
-Eigen::MatrixXd Bdbl(n, j); // Control input matrix (double)
+Eigen::MatrixXf Lc(j, j); // Gain filter tracking matrix
 Eigen::VectorXf x0(n); // Initial states
 Eigen::VectorXf u(j); // Control input vector
+Eigen::VectorXf servo_compensator(j); // Lc(G)*ref
+Eigen::VectorXf y(m); // Measurement vector
+Eigen::VectorXf ref(j); // Target reference vector
 
-void pid_vel_form(); 
 void pid_pos_form();
 void lqg();
+Eigen::MatrixXf sliding_window(Eigen::VectorXf y);
+Eigen::VectorXf setTarget(float x, float y, float z, float psi);
 
 void imu_callback(const sensor_msgs::Imu::ConstPtr& msg);
 
@@ -173,7 +175,7 @@ class KalmanFilter {
 		/* Do prediction (INPUT) */
 		void predict ( Eigen::VectorXf U );
 		/* Do correction */
-		void correct ( Eigen::VectorXf Y );
+		void correct ( Eigen::VectorXf Y); // add Eigen::MatrixXf _R for dynamic R matrix
 };
 
 class MCCKalmanFilter {
@@ -211,7 +213,7 @@ class MCCKalmanFilter {
 		/* Do prediction (NO INPUT) */
 		void predict ( void );
 		/* Do prediction (INPUT) */
-		void predict ( Eigen::VectorXf U );
+		void predict ( Eigen::VectorXf U);
 		/* Do correction */
 		void correct ( Eigen::VectorXf Y );
 
@@ -256,3 +258,4 @@ class HinfFilter {
 		/* Do correction */
 		void correct ( Eigen::VectorXf Y );
 };
+
