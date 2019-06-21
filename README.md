@@ -1,3 +1,9 @@
+This repository provides optimal and robust control algorithms for indoors autonomous navigation of DJI M100 using UWB wireless communications.
+The filtering and estimation is done by: 
+1. Kalman filter
+2. H-infinity filter
+3. Maximum Correntropy Criterion Kalman filter (MCC-KF)
+
 Prerequisites:
 1. Ubuntu 16.04
 2. Install ROS Kinetic (http://wiki.ros.org/kinetic/Installation/Ubuntu)
