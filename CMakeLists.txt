@@ -194,13 +194,14 @@ include_directories(
 # target_link_libraries(dji_sdk_demo_node
 #   ${catkin_LIBRARIES}
 # )
-#add_executable(ellipse
-#        src/ellipse.cpp)
-#target_link_libraries(ellipse
-#        ${catkin_LIBRARIES}
-#        ${DJIOSDK_LIBRARIES}
-#        )
-#add_dependencies(ellipse  dji_sdk_generate_messages_cpp)
+
+add_executable(system_identification
+        src/system_identification.cpp)
+target_link_libraries(system_identification
+        ${catkin_LIBRARIES}
+        ${DJIOSDK_LIBRARIES}
+        )
+add_dependencies(system_identification  dji_sdk_generate_messages_cpp)
 
 add_executable(hover
         src/hover.cpp)
@@ -210,24 +211,13 @@ target_link_libraries(hover
         )
 add_dependencies(hover  dji_sdk_generate_messages_cpp)
 
-
-#add_executable(kalmanhov
-#        src/kalmanhov.cpp)
-#target_link_libraries(kalmanhov
-#        ${catkin_LIBRARIES}
-#        ${DJIOSDK_LIBRARIES}
-#        )
-#add_dependencies(kalmanhov  dji_sdk_generate_messages_cpp)
-
-
-#add_executable(line
-#        src/line.cpp)
-#target_link_libraries(line
-#        ${catkin_LIBRARIES}
-#        ${DJIOSDK_LIBRARIES}
-#        )
-#add_dependencies(line  dji_sdk_generate_messages_cpp)
-
+add_executable(waypoints
+        src/waypoints.cpp)
+target_link_libraries(waypoints
+        ${catkin_LIBRARIES}
+        ${DJIOSDK_LIBRARIES}
+        )
+add_dependencies(waypoints  dji_sdk_generate_messages_cpp)
 
 if (OPEN_CV_3_3_0_INSTALLED AND FOUND_OPENCV_VIZ AND FOUND_ADVANCED_SENSING)
     message(STATUS "Found OpenCV ${OpenCV_VERSION}, Viz3d, and advanced sensing module, depth percpetion demo will be compiled")
