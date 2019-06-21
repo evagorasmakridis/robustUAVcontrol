@@ -1,4 +1,4 @@
-This repository provides optimal and robust control algorithms for indoors autonomous navigation of DJI M100 using UWB wireless communications.
+This repository provides optimal and robust control algorithms for indoors autonomous navigation of DJI M100 using UWB wireless-based localization.
 The filtering and estimation is done by: 
 1. Kalman filter
 2. H-infinity filter
