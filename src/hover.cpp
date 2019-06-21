@@ -99,6 +99,7 @@ int main(int argc, char **argv){
   Rn(1,1) = 0.002;
   Rn(2,2) = 2.4;
   Rn(3,3) = 0.5;
+  SW.setZero(T,m);
  
   ref << setTarget(5.0,2.0,1.0,0.0); // x,y,z,psi
  
@@ -162,56 +163,6 @@ geometry_msgs::Vector3 toEulerAngle(geometry_msgs::Quaternion quat){
   return ans;
 }
 
-void pid_pos_form(){
-  printf("\n-----------------------------------\nPID control - (sample k = %d)\n-----------------------------------\n", k);
-  /*
-  k += 1; // sampling step
- 
-  u[0] = kp * (target_x - curr_pos.x) + kd * (target_x - curr_pos.x - x_error) - 0.006;
-  u[1] = kp * (target_y - curr_pos.y) + kd * (target_y - curr_pos.y - y_error) - 0.007;
-  u[2] = 0.8; // height
-  u[3] = 0; // yaw angle
-  
-  // Bound angles and height for safety and linerized operating point
-  if (fabs(u[0]) >= max_angle)
-    pitch_cmd = (u[0] > 0) ? max_angle : -1 * max_angle;
-  else
-    pitch_cmd = u[0];
-  
-  if (fabs(u[1]) >= max_angle)
-    roll_cmd = (u[1] > 0) ? max_angle : -1 * max_angle;
-  else
-    roll_cmd = u[1];
-
-  if (fabs(u[2]) >= max_yaw)
-    yaw_cmd = (u[2] > 0) ? max_yaw : -1 * max_yaw;
-
-  if (fabs(u[3]) >= max_altitude)
-    z_cmd = (u[3] > 0) ? max_altitude : -1 * max_altitude;
-
-  // Publish controls to the drone
-  uint8_t flag = (DJISDK::VERTICAL_POSITION   |
-                DJISDK::HORIZONTAL_ANGLE |
-                DJISDK::YAW_RATE            |
-                DJISDK::HORIZONTAL_BODY  |
-                DJISDK::STABLE_ENABLE);
-  sensor_msgs::Joy controlmsg;
-  controlmsg.axes.push_back(roll_cmd); // (desired roll - movement along y-axis)
-  controlmsg.axes.push_back(pitch_cmd); // (desired pitch - movements along x-axis)
-  controlmsg.axes.push_back(1); // z-cmd (desired height in meters)
-  controlmsg.axes.push_back(0); // (desired yaw rate)
-  controlmsg.axes.push_back(flag);
-  ctrlRollPitchYawHeightPub.publish(controlmsg);
-
-  x_error = target_x - curr_pos.x;
-  y_error = target_y - curr_pos.y;
- 
-  orientation_file << rpy.x << "," << rpy.y << "," << rpy.z << std::endl;
-  position_file << curr_pos.x << "," << curr_pos.y << "," << curr_pos.z << std::endl;
-  controls_file << pitch_cmd << "," << roll_cmd << "," << yaw_cmd << "," << z_cmd << std::endl;
-  */
-}
-
 void lqg(){
   printf("\n-----------------------------------\nLQG control - (sample k = %d)\n-----------------------------------\n", k);
   y << rpy.x, rpy.y, curr_pos.x, curr_pos.y;
@@ -269,12 +220,12 @@ void lqg(){
   k += 1; // sampling step
 }
 
-Eigen::MatrixXf sliding_window(Eigen::VectorXf y){
+Eigen::MatrixXf sliding_window(Eigen::VectorXf y, int i){
     // Measurement noise sliding window covariance matrix
-    SW.row(T-1) = y;
-    std::cout << "Matrix :\n" << SW.transpose() << std::endl;
-    if (k<T){
-        Eigen::MatrixXf centered = SW.topRows(k).rowwise() - SW.topRows(k).colwise().mean();
+    SW.row(T-1) = y; // the last row is the last measurement vector
+
+    if (i<T){
+        Eigen::MatrixXf centered = SW.bottomRows(i).rowwise() - SW.bottomRows(i).colwise().mean();
         Rn = (centered.adjoint() * centered) / double(SW.rows() - 1);
     }
     else{

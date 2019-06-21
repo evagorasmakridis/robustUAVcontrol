@@ -91,7 +91,7 @@ Eigen::MatrixXf Cc(j, n); // Control output matrix
 Eigen::MatrixXf Qn(n, n); // Process noise covariance
 Eigen::MatrixXf Rn(m, m); // Measurement noise covariance
 Eigen::MatrixXf P0(n, n); // Estimate error covariance
-Eigen::MatrixXf SW(m,T); // Sliding window measurement noise error covariance
+Eigen::MatrixXf SW(T,m); // Sliding window measurement noise error covariance
 Eigen::MatrixXf In(n, n); // Identity matrix
 Eigen::MatrixXf Im(m, m); // Identity matrix
 Eigen::MatrixXf L(j, n); // LQR control gain matrix
@@ -102,9 +102,8 @@ Eigen::VectorXf servo_compensator(j); // Lc(G)*ref
 Eigen::VectorXf y(m); // Measurement vector
 Eigen::VectorXf ref(j); // Target reference vector
 
-void pid_pos_form();
 void lqg();
-Eigen::MatrixXf sliding_window(Eigen::VectorXf y);
+Eigen::MatrixXf sliding_window(Eigen::VectorXf y, int k);
 Eigen::VectorXf setTarget(float x, float y, float z, float psi);
 
 void imu_callback(const sensor_msgs::Imu::ConstPtr& msg);
