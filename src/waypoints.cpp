@@ -13,7 +13,7 @@
 #include <fstream>
 #include <chrono>
 #include <string>
-#include "dji_sdk_demo/hover.h"
+#include "dji_sdk_demo/waypoints.h"
 #include "dji_sdk/dji_sdk.h"
 
 ros::ServiceClient set_local_pos_reference;
@@ -178,7 +178,7 @@ void lqg(){
     u << servo_compensator - L*estimator.X; 
   }
 
-  // Rn = sliding_window(y);
+  Rn = sliding_window(y,k);
   
   // State estimation
   estimator.predict(u);
@@ -215,8 +215,8 @@ void lqg(){
   states_file << estimator.X[0] << "," << estimator.X[1] << "," << estimator.X[2] << "," << estimator.X[3] << "," << estimator.X[4] << "," << estimator.X[5] << "," << estimator.X[6] << "," << estimator.X[7] << std::endl;
   controls_file << roll_cmd << "," << pitch_cmd << std::endl;
 
-  x_error = ref[0] - estimator.X[4] 
-  y_error = ref[1] - estimator.X[6] 
+  x_error = ref[0] - estimator.X[4];
+  y_error = ref[1] - estimator.X[6];
 
   k += 1; // sampling step
 }
