@@ -103,7 +103,7 @@ Eigen::VectorXf y(m); // Measurement vector
 Eigen::VectorXf ref(j); // Target reference vector
 
 void lqg();
-Eigen::MatrixXf sliding_window(Eigen::VectorXf y, int k);
+Eigen::MatrixXf sliding_window(Eigen::VectorXf y, int i);
 Eigen::VectorXf setTarget(float x, float y, float z, float psi);
 
 void imu_callback(const sensor_msgs::Imu::ConstPtr& msg);
