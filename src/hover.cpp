@@ -181,7 +181,7 @@ void lqg(){
     u << servo_compensator - L*estimator.X; 
   }
 
-  // Rn = sliding_window(y);
+  Rn = sliding_window(y,k);
   
   // State estimation
   estimator.predict(u);
