@@ -76,6 +76,7 @@ set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 ## Declare ROS messages, services and actions ##
 ################################################
 
+
 ## To declare and build messages, services or actions from within this
 ## package, follow these steps:
 ## * Let MSG_DEP_SET be the set of packages whose message types you use in
@@ -92,7 +93,6 @@ set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
  #    message_generation
 #)
 ##   * add "message_runtime" and every package in MSG_DEP_SET to
-     catkin_package(CATKIN_DEPENDS message_runtime)
 ##   * uncomment the add_*_files sections below as needed
 ##     and list every .msg/.srv/.action file to be processed
 ##   * uncomment the generate_messages entry below
@@ -102,9 +102,16 @@ set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
  add_message_files(
    FILES
    Pos.msg
-   States.msg
  )
 
+## Generate added messages and services with any dependencies listed here
+generate_messages(
+  DEPENDENCIES
+  std_msgs  # Or other packages containing msgs
+)
+
+
+catkin_package(CATKIN_DEPENDS message_runtime)
 ## Generate services in the 'srv' folder
 # add_service_files(
 #   FILES
@@ -118,12 +125,6 @@ set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 #   Action1.action
 #   Action2.action
 # )
-
-## Generate added messages and services with any dependencies listed here
-#generate_messages(
-#  DEPENDENCIES
-#  std_msgs  # Or other packages containing msgs
-#)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -194,14 +195,13 @@ include_directories(
 # target_link_libraries(dji_sdk_demo_node
 #   ${catkin_LIBRARIES}
 # )
-
-add_executable(system_identification
-        src/system_identification.cpp)
-target_link_libraries(system_identification
-        ${catkin_LIBRARIES}
-        ${DJIOSDK_LIBRARIES}
-        )
-add_dependencies(system_identification  dji_sdk_generate_messages_cpp)
+#add_executable(ellipse
+#        src/ellipse.cpp)
+#target_link_libraries(ellipse
+#        ${catkin_LIBRARIES}
+#        ${DJIOSDK_LIBRARIES}
+#        )
+#add_dependencies(ellipse  dji_sdk_generate_messages_cpp)
 
 add_executable(hover
         src/hover.cpp)
@@ -211,6 +211,14 @@ target_link_libraries(hover
         )
 add_dependencies(hover  dji_sdk_generate_messages_cpp)
 
+add_executable(system_ident
+        src/system_identification.cpp)
+target_link_libraries(system_ident
+        ${catkin_LIBRARIES}
+        ${DJIOSDK_LIBRARIES}
+        )
+add_dependencies(system_ident  dji_sdk_generate_messages_cpp)
+
 add_executable(waypoints
         src/waypoints.cpp)
 target_link_libraries(waypoints
@@ -218,6 +226,7 @@ target_link_libraries(waypoints
         ${DJIOSDK_LIBRARIES}
         )
 add_dependencies(waypoints  dji_sdk_generate_messages_cpp)
+
 
 if (OPEN_CV_3_3_0_INSTALLED AND FOUND_OPENCV_VIZ AND FOUND_ADVANCED_SENSING)
     message(STATUS "Found OpenCV ${OpenCV_VERSION}, Viz3d, and advanced sensing module, depth percpetion demo will be compiled")
@@ -292,3 +301,4 @@ install(DIRECTORY launch
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
