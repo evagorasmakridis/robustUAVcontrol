@@ -75,7 +75,7 @@ if __name__ == '__main__':
                                bitrate=2,
                                prf=2,
                                plen=0x04,
-                               gain_db=20.5)
+                               gain_db=11.5) #30.0
 
     # set to True if local tag needs to change settings as well.
     set_local = True
