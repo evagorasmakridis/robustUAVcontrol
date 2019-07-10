@@ -103,9 +103,9 @@ void system_identification(){
   printf("\n-----------------------------------\nSystem identification - (sample k = %d)\n-----------------------------------\n", k);
   k += 1; // sampling step
 
-  if ( k % (2*freq) == 0)
+  if ( k % (1*freq) == 0)
     sign = -1 * sign;
-  amplitude = 0.07 * sign;
+  amplitude = 0.06* sign;
   
   // Publish controls to the drone
   uint8_t flag = (DJISDK::VERTICAL_POSITION   |
@@ -114,15 +114,17 @@ void system_identification(){
                 DJISDK::HORIZONTAL_BODY  |
                 DJISDK::STABLE_ENABLE);
   sensor_msgs::Joy controlmsg;
-  controlmsg.axes.push_back(amplitude); // x-cmd (desired roll) 
-  controlmsg.axes.push_back(0); // y-cmd (desired pitch)
+  controlmsg.axes.push_back(amplitude); // (desired roll - movement along y-axis)
+  controlmsg.axes.push_back(amplitude); // (desired pitch - movement along x-axis)
   controlmsg.axes.push_back(1); // z-cmd (altitude)
   controlmsg.axes.push_back(0); // yaw-cmd (yaw)
   controlmsg.axes.push_back(flag);
   ctrlRollPitchYawHeightPub.publish(controlmsg);
 
   orientation_file << rpy.x << "," << rpy.y << "," << rpy.z << std::endl;
-  controls_file << amplitude << "," << 0 << "," << 1 << "," << 0 << std::endl;
+  controls_file << amplitude << std::endl;
+  //orientation_file << curr_imu.angular_velocity.z << std::endl;
+  //position_file << curr_pos.x << std::endl;
 }
 
 void uwb_position_callback(const dji_sdk_demo::Pos::ConstPtr &msg){
@@ -218,7 +220,7 @@ bool M100monitoredTakeoff(){
   ros::spinOnce();
 
   // Step 1: If M100 is not in the air after 10 seconds, fail.
-  while (ros::Time::now() - start_time < ros::Duration(10)){
+  while (ros::Time::now() - start_time < ros::Duration(4)){
     ros::Duration(0.01).sleep();
     ros::spinOnce();
   }

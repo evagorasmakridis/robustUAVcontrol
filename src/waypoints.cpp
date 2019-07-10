@@ -178,7 +178,7 @@ void lqg(){
     u << servo_compensator - L*estimator.X; 
   }
 
-  Rn = sliding_window(y,k);
+  // Rn = sliding_window(y);
   
   // State estimation
   estimator.predict(u);
@@ -215,8 +215,8 @@ void lqg(){
   states_file << estimator.X[0] << "," << estimator.X[1] << "," << estimator.X[2] << "," << estimator.X[3] << "," << estimator.X[4] << "," << estimator.X[5] << "," << estimator.X[6] << "," << estimator.X[7] << std::endl;
   controls_file << roll_cmd << "," << pitch_cmd << std::endl;
 
-  x_error = ref[0] - estimator.X[4];
-  y_error = ref[1] - estimator.X[6];
+  x_error = curr_pos.x - estimator.X[4];
+  y_error = curr_pos.y - estimator.X[6]; 
 
   k += 1; // sampling step
 }
@@ -238,53 +238,51 @@ Eigen::MatrixXf sliding_window(Eigen::VectorXf y){
     return Rn;
 }
 
-Eigen::VectorXf setTarget(float x, float y, float z, float psi){
+void setTarget(float x, float y, float z, float psi){
   target_x = x;
   target_y = y;
   target_z = z;
   target_psi = psi;
   
-  ref << target_x, target_y, target_z, target_psi
-  
-  return ref;
+  ref << target_x, target_y;
 }
 
 void uwb_position_callback(const dji_sdk_demo::Pos::ConstPtr &msg){
   curr_pos = *msg;
   
-  if (target_set_state >= 1) {
-    lqg(); //pid_pos_form();
-  }
-
   switch(target_set_state){
     case 1:
-      ref << setTarget(3.0,2.0,1.0,0.0); // x,y,z,psi
+      setTarget(3,2,1,0); // x,y,z,psi
       if((fabs(x_error)<POS_THRESH)&&(fabs(y_error)<POS_THRESH)){
           printf("Going to Waypoint 2 (x:5, y:2)\n" );
           target_set_state=1;
       }
       break;
     case 2:
-      ref << setTarget(5.0,2.0,1.0,0.0); // x,y,z,psi
+      setTarget(5,2,1,0); // x,y,z,psi
       if((fabs(x_error)<POS_THRESH)&&(fabs(y_error)<POS_THRESH)){
           printf("Going to Waypoint 3 (x:5, y:3)\n" );
           target_set_state=2;
       }     
       break;
     case 3:
-      ref << setTarget(5.0,3.0,1.0,0.0); // x,y,z,psi
+      setTarget(5,3,1,0); // x,y,z,psi
       if((fabs(x_error)<POS_THRESH)&&(fabs(y_error)<POS_THRESH)){
           printf("Going to Waypoint 4 (x:3, y:3)\n" );
           target_set_state=3;
       }
       break;
     case 4:
-      ref << setTarget(3.0,3.0,1.0,0.0); // x,y,z,psi
+      setTarget(3,3,1,0); // x,y,z,psi
       if((fabs(x_error)<POS_THRESH)&&(fabs(y_error)<POS_THRESH)){
           printf("Going to Waypoint 1 (x:3, y:2)\n" );
           target_set_state=1;
       }     
       break;
+  }
+
+  if (target_set_state > 0) {
+    lqg(); //pid_pos_form();
   }
 }
 

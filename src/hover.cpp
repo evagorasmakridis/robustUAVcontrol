@@ -1,4 +1,4 @@
-/** @file demo_flight_control.cpp
+/* @file demo_flight_control.cpp
 *  @version 3.3
 *  @date September, 2017
 *
@@ -32,15 +32,16 @@ float kp = 0.1; // proportional gain P
 float ki = 0.005; // integral gain I
 float kd = 4.5; // derivative gain D
 float max_angle = 0.1; // in rads
+float max_yawrate = 2; // in rads/s
 
 // log files
 std::ofstream position_file;
-std::ofstream cct_file;
-std::ofstream variance_file;
+//std::ofstream cct_file;
+//std::ofstream variance_file;
 std::ofstream orientation_file;
 std::ofstream states_file;
 std::ofstream controls_file;
-std::ofstream gains_file;
+//std::ofstream gains_file;
 
 KalmanFilter estimator(n, m);
 //MCCKalmanFilter estimator(n, m, sigma);
@@ -48,38 +49,50 @@ KalmanFilter estimator(n, m);
 
 int main(int argc, char **argv){
   // Discrete LTI 100Hz (imported from Matlab model)
-  u << 0, 0; // initial input
-  
-  A << 0.992, 0.019, 0, 0, 0, 0, 0, 0,
-       -0.745, 0.864, 0, 0, 0, 0, 0, 0,
-       0, 0, 0.993, 0.019, 0, 0, 0, 0,
-       0, 0, -0.715, 0.871, 0, 0, 0, 0,
-       0, 0, 0.002, 0, 1, 0.02, 0, 0,
-       0, 0, 0.196, 0.002, 0, 1.007, 0, 0,
-       -0.002, -0, 0, 0, 0, 0, 1, 0.02,
-       -0.196, -0.002, 0, 0, 0, 0, 0, 1.007;
+	u << 0, 0, 0, 0; // initial input
 
-  B << 0.007, 0,
-       0.702, 0,
-       0, 0.007,
-       0, 0.676,
-       0, 0,
-       0, 0,
-       0, 0,
-       0, 0;
+	A << 0.95548,0.040781,0,0,0,0,0,0,0,0,0,0,
+	  -1.659,0.64057,0,0,0,0,0,0,0,0,0,0,
+	  0,0,0.95432,0.04072,0,0,0,0,0,0,0,0,
+	  0,0,-1.7013,0.63808,0,0,0,0,0,0,0,0,
+	  0,0,0,0,1,0.047188,0,0,0,0,0,0,
+	  0,0,0,0,0,0.88967,0,0,0,0,0,0,
+	  0,0,0,0,0,0,1,0.047253,0,0,0,0,
+	  0,0,0,0,0,0,0,0.89217,0,0,0,0,
+	  0,0,0.012225,0.00018575,0,0,0,0,1,0.050377,0,0,
+	  0,0,0.48644,0.010783,0,0,0,0,0,1.0151,0,0,
+	  -0.012228,-0.00018588,0,0,0,0,0,0,0,0,1,0.050377,
+	  -0.48664,-0.010792,0,0,0,0,0,0,0,0,0,1.0151;
 
-  C << 1, 0, 0, 0, 0, 0, 0, 0,
-       0, 0, 1, 0, 0, 0, 0, 0,
-       0, 0, 0, 0, 1, 0, 0, 0,
-       0, 0, 0, 0, 0, 0, 1, 0;
+	B << 0.044205,0,0,0,
+	  1.6471,0,0,0,
+	  0,0.044613,0,0,
+	  0,1.6614,0,0,
+	  0,0,0.0028131,0,
+	  0,0,0.11037,0,
+	  0,0,0,0.0028157,
+	  0,0,0,0.11052,
+	  0,9.6602e-05,0,0,
+	  0,0.0075788,0,0,
+	  -9.5679e-05,0,0,0,
+	  -0.0075075,0,0,0;
 
-  Cc << 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 1, 0;
+        C << 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	  0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	  0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+	  0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+	  0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+	  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0;
 
-//  L << 0.2770, 0.0380, 0, 0, 0, 0, -0.0310, -0.1460,
-//       0, 0, 0.2770, 0.0390, 0.0310, 0.1450, 0, 0;
-  L << 0.746,0.091,0,0,-0,0,-0.097,-0.255,
-       0,0,0.754,0.096,0.097,0.255,-0,-0;
+	Cc << 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+	   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+	   0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+	   0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0;
+
+	L << 0.38537,0.044706,4.0305e-14,4.8536e-15,-1.5994e-17,1.5531e-16,3.034e-16,1.426e-16,5.9965e-15,2.2669e-14,-0.095486,-0.21608,
+	  4.1527e-14,4.9238e-15,0.38045,0.043945,-1.3245e-15,-1.1759e-16,-4.4335e-17,-1.5581e-17,0.095517,0.21725,-7.9887e-15,-2.3259e-14,
+	  4.14e-14,4.8795e-15,-2.2896e-14,-2.648e-15,2.0828,1.1182,-1.5473e-14,-5.5185e-15,-7.2734e-15,-1.2805e-14,-7.174e-15,-2.2273e-14,
+	  3.2131e-14,4.1488e-15,-3.8185e-15,-4.4736e-16,-3.0607e-14,-5.882e-15,0.97868,0.3645,2.9786e-15,-2.4239e-15,2.15e-15,-1.7143e-14;
 
   // LQR weighting matrices
   // Q.setIdentity(n, n);
@@ -90,23 +103,13 @@ int main(int argc, char **argv){
   Im.setIdentity(m,m);
   P0=4*In;
   Qn=0.1*In;
-  Rn=1*Im;
-  Qn(0,0) = 0.001;
-  Qn(2,2) = 0.001;
-  Qn(4,4) = 1;
-  Qn(6,6) = 0.1;
-  Rn(0,0) = 0.003;
-  Rn(1,1) = 0.002;
-  Rn(2,2) = 2.4;
-  Rn(3,3) = 0.5;
+  Rn=0.01*Im;
+  Qn(0,0) = 0.001; // 0.001
+  Qn(2,2) = 0.001; // 0.001
+  Rn(3,3) = 1;
   SW.setZero(T,m);
  
-  ref << setTarget(5.0,2.0,1.0,0.0); // x,y,z,psi
- 
-  // Reference tracking
-  Lc = -(Cc*(In-A-B*L).inverse()*B).inverse();
-  servo_compensator = Lc*ref;
-
+  std::cout << "\nLc:\n" << Lc << "\n" << std::endl;
   ros::init(argc, argv, "demo_local_position_control_node");
   ros::NodeHandle nh;
   
@@ -138,12 +141,12 @@ int main(int argc, char **argv){
   bool takeoff_result;
 
   position_file.open("/home/ubuntu/results/position.txt");
-  variance_file.open("/home/ubuntu/results/variance.txt");
+  //variance_file.open("/home/ubuntu/results/variance.txt");
   orientation_file.open("/home/ubuntu/results/orientation.txt");
   states_file.open("/home/ubuntu/results/states.txt");
   controls_file.open("/home/ubuntu/results/controls.txt");
-  gains_file.open("/home/ubuntu/results/gains.txt");
-  cct_file.open("/home/ubuntu/results/control_computation_time.txt");
+  //gains_file.open("/home/ubuntu/results/gains.txt");
+  //cct_file.open("/home/ubuntu/results/control_computation_time.txt");
 
   ROS_INFO("M100 taking off!");
   takeoff_result = M100monitoredTakeoff();
@@ -165,28 +168,31 @@ geometry_msgs::Vector3 toEulerAngle(geometry_msgs::Quaternion quat){
 
 void lqg(){
   printf("\n-----------------------------------\nLQG control - (sample k = %d)\n-----------------------------------\n", k);
-  y << rpy.x, rpy.y, curr_pos.x, curr_pos.y;
+  y << rpy.x-0.011, rpy.y+0.028, rpy.z, curr_pos.z, curr_pos.x, curr_pos.y;
   
   if (k==0){
     // Initial states
-    x0 << rpy.x, 0, rpy.y, 0, curr_pos.x, 0, curr_pos.y, 0; // phi,phid,theta,thetad,psi,psid,z,zd,x,xd,y,yd
+    yaw_init = rpy.z;
+    x0 << rpy.x-0.011, curr_imu.angular_velocity.x, rpy.y+0.028, curr_imu.angular_velocity.y, rpy.z, curr_imu.angular_velocity.z, curr_pos.z, 0, curr_pos.x, 0, curr_pos.y, 0; // phi,phid,theta,thetad,psi,psid,z,zd,x,xd,y,yd
     // Kalman filter initialization
     estimator.setFixed(A, B, C, Qn, Rn);
     estimator.setInitial(x0, P0);
-    // Initial control input
-    u << servo_compensator - L*x0;
+    ref << 2.0, 4.0, 1.0, yaw_init;
+    // Reference tracking
+    Lc = (Cc*(In-A+B*L).inverse()*B).inverse();
+    servo_compensator = Lc*ref;
+    // State estimation
+    estimator.predict(u);
+    estimator.correct(y);
+    u << servo_compensator - L*estimator.X;  
   }
   else {
-    // LQG reference tracking control
-    u << servo_compensator - L*estimator.X; 
+    //sliding_window(y,k);  
+    estimator.predict(u);
+    estimator.correct(y);
+    u << servo_compensator - L*estimator.X;  
   }
 
-  Rn = sliding_window(y,k);
-  
-  // State estimation
-  estimator.predict(u);
-  estimator.correct(y);
- 
   // Bound angles and height for safety and linerized operating point
   if (fabs(u[0]) >= max_angle)
     roll_cmd = (u[0] > 0) ? max_angle : -1 * max_angle;
@@ -198,6 +204,11 @@ void lqg(){
   else
     pitch_cmd = u[1];
 
+  if (fabs(u[2]) >= max_yawrate)
+    yaw_cmd = (u[2] > 0) ? max_yawrate : -1 * max_yawrate;
+  else
+    yaw_cmd = u[2];
+
   // Publish controls to the drone
   uint8_t flag = (DJISDK::VERTICAL_POSITION   |
                 DJISDK::HORIZONTAL_ANGLE |
@@ -208,25 +219,28 @@ void lqg(){
   controlmsg.axes.push_back(roll_cmd); // (desired roll - movement along y-axis)
   controlmsg.axes.push_back(pitch_cmd); // (desired pitch - movements along x-axis)
   controlmsg.axes.push_back(1); // z-cmd (desired height in meters)
-  controlmsg.axes.push_back(0); // (desired yaw rate)
+  controlmsg.axes.push_back(yaw_cmd); // (desired yaw rate)
   controlmsg.axes.push_back(flag);
   ctrlRollPitchYawHeightPub.publish(controlmsg);
 
-  orientation_file << rpy.x << "," << rpy.y << "," << rpy.z << std::endl;
+  orientation_file << y[0] << "," << y[1] << "," << y[2] << std::endl;
   position_file << curr_pos.x << "," << curr_pos.y << "," << curr_pos.z << std::endl;
   //variance_file << Rn(0,0) << "," << Rn(1,1) << "," << Rn(2,2) << "," << Rn(3,3) << std::endl;
-  states_file << estimator.X[0] << "," << estimator.X[1] << "," << estimator.X[2] << "," << estimator.X[3] << "," << estimator.X[4] << "," << estimator.X[5] << "," << estimator.X[6] << "," << estimator.X[7] << std::endl;
-  controls_file << roll_cmd << "," << pitch_cmd << std::endl;
+  states_file << estimator.X[0] << "," << estimator.X[1] << "," << estimator.X[2] << "," << estimator.X[3] << "," << estimator.X[4] << "," << estimator.X[5] << "," << estimator.X[6] << "," << estimator.X[7] << "," << estimator.X[8] << "," << estimator.X[9] << "," << estimator.X[10] << "," << estimator.X[11] <<  std::endl;
+  controls_file << roll_cmd << "," << pitch_cmd << "," << yaw_cmd << std::endl;
   k += 1; // sampling step
 }
 
-Eigen::MatrixXf sliding_window(Eigen::VectorXf y, int i){
+void sliding_window(Eigen::VectorXf y, int i){
     // Measurement noise sliding window covariance matrix
+    
     SW.row(T-1) = y; // the last row is the last measurement vector
 
     if (i<T){
         Eigen::MatrixXf centered = SW.bottomRows(i).rowwise() - SW.bottomRows(i).colwise().mean();
-        Rn = (centered.adjoint() * centered) / double(SW.rows() - 1);
+        //std::cout << "\nCentered:\n" << centered << "\n" << std::endl;
+        if ( i!=1 )
+          Rn = (centered.adjoint() * centered) / double(i);
     }
     else{
         Eigen::MatrixXf centered = SW.rowwise() - SW.colwise().mean();
@@ -234,18 +248,15 @@ Eigen::MatrixXf sliding_window(Eigen::VectorXf y, int i){
     }
     std::cout << "\nMeasurement online covariance matrix (Rn):\n" << Rn << "\n" << std::endl;
     SW.topRows(T-1) = SW.bottomRows(T-1); 
-    return Rn;
 }
 
-Eigen::VectorXf setTarget(float x, float y, float z, float psi){
+void setTarget(float x, float y, float z, float psi){
   target_x = x;
   target_y = y;
   target_z = z;
   target_psi = psi;
   
-  ref << target_x, target_y, target_z, target_psi
-  
-  return ref;
+  ref << target_x, target_y, target_z, target_psi;
 }
 
 void uwb_position_callback(const dji_sdk_demo::Pos::ConstPtr &msg){
@@ -255,7 +266,7 @@ void uwb_position_callback(const dji_sdk_demo::Pos::ConstPtr &msg){
     lqg(); //pid_pos_form();
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
-    cct_file << elapsed.count() << std::endl;
+    //cct_file << elapsed.count() << std::endl;
   }
 }
 
@@ -347,7 +358,7 @@ bool M100monitoredTakeoff(){
 
   // Step 1: If M100 is not in the air after 10 seconds, fail.
   // Lets do it after 4s
-  while (ros::Time::now() - start_time < ros::Duration(4)){
+  while (ros::Time::now() - start_time < ros::Duration(6)){
     ros::Duration(0.01).sleep();
     ros::spinOnce();
   }
@@ -410,6 +421,15 @@ void KalmanFilter::correct ( Eigen::VectorXf Y) {
   X0 = X;
   P0 = P;
 }
+// Correct the prediction, using mesaurement Y: mesaure vector and covariance measurement matrix R
+void KalmanFilter::correct ( Eigen::VectorXf Y, Eigen::MatrixXf R) {
+  K = ( P * C.transpose() ) * ( C * P * C.transpose() + R).inverse();
+  X = X + K*(Y - C * X);
+  P = (I - K * C) * P;
+  X0 = X;
+  P0 = P;
+}
+
 
 // MCC Kalman filter constructor:
 MCCKalmanFilter::MCCKalmanFilter(int _n,  int _m, int _sigma) {
@@ -450,7 +470,7 @@ void MCCKalmanFilter::predict( Eigen::VectorXf U ){
   P = (A * P0 * A.transpose()) + Q;
 }
 // Correct the prediction, using mesaurement  Y: mesaure vector
-void MCCKalmanFilter::correct ( Eigen::VectorXf Y ) {
+void MCCKalmanFilter::correct ( Eigen::VectorXf Y) {
   // norm_innov = sqrt((innov).'*invers_R*(innov));
   // Gkernel = exp(-(pow(norm(Y - C*X),2)) /(2*pow(sigma,2)))/exp(-(pow(norm(X - A*X),2))/(2*pow(sigma,2)));
   Eigen::VectorXf innov(m);
@@ -462,6 +482,20 @@ void MCCKalmanFilter::correct ( Eigen::VectorXf Y ) {
   X0 = X;
   P0 = P;
 }
+// Correct the prediction, using mesaurement  Y: mesaure vector and covariance measurement matrix R
+void MCCKalmanFilter::correct ( Eigen::VectorXf Y, Eigen::MatrixXf R ) {
+  // norm_innov = sqrt((innov).'*invers_R*(innov));
+  // Gkernel = exp(-(pow(norm(Y - C*X),2)) /(2*pow(sigma,2)))/exp(-(pow(norm(X - A*X),2))/(2*pow(sigma,2)));
+  Eigen::VectorXf innov(m);
+  Eigen::VectorXf innovx(n);
+  innov = Y-C*X;
+  innovx = X-A*X;
+  K = (P.inverse() + exp(-(pow(innov.norm(),2)) /(2*pow(sigma,2)))/exp(-(pow(innovx.norm(),2))/(2*pow(sigma,2))) * C.transpose()*R.inverse()*C).inverse() * exp(-(pow(innov.norm(),2)) /(2*pow(sigma,2)))/exp(-(pow(innovx.norm(),2))/(2*pow(sigma,2))) * C.transpose()*R.inverse();  X = X + K *(Y - C*X);
+  P = (I - K*C) * P * (I - K*C).transpose() + (K*R*K.transpose());
+  X0 = X;
+  P0 = P;
+}
+
 
 // H infinity filter constructor:
 HinfFilter::HinfFilter(int _n,  int _m, int _theta) {
