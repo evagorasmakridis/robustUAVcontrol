@@ -9,10 +9,10 @@
  *
  */
 
-#ifndef PROJECT_DEMO_LOCAL_POSITION_CONTROL_H
-#define PROJECT_DEMO_LOCAL_POSITION_CONTROL_H
-
+#ifndef PROJECT_HOVER_H
+#define PROJECT_HOVER_H
 #endif //PROJECT_DEMO_LOCAL_POSITION_CONTROL_H
+
 #include <dji_sdk/SetLocalPosRef.h>
 #include <ros/ros.h>
 #include <dji_sdk_demo/Pos.h>
@@ -63,17 +63,15 @@ int k = 0; // Sampling step
 int n = 8; // Number of states
 int m = 4; // Number of measurements
 int j = 2; // Number of inputs
+int r = 4; // Number of reference signals
 int T = 2; // Sliding window size (samples)
 int sigma = 100; // kernel size mcckf
-
 float target_x;
 float target_y;
 float target_z;
 float target_psi;
-
 float x_error=0;
 float y_error=0;
-
 // control inputs
 float roll_cmd = 0;
 float pitch_cmd = 0;
@@ -104,8 +102,8 @@ Eigen::VectorXf y(m); // Measurement vector
 Eigen::VectorXf ref(j); // Target reference vector
 
 void lqg();
-Eigen::MatrixXf sliding_window(Eigen::VectorXf y);
-Eigen::VectorXf setTarget(float x, float y, float z, float psi);
+Eigen::MatrixXf sliding_window(Eigen::VectorXf y, int i);
+void setTarget(float x, float y, float z, float psi);
 
 void imu_callback(const sensor_msgs::Imu::ConstPtr& msg);
 

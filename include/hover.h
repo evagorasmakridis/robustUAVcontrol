@@ -54,31 +54,28 @@ geometry_msgs::Quaternion current_atti;
 geometry_msgs::Vector3 rpy;
 dji_sdk_demo::Pos curr_pos;
 
-bool set_local_position();
-
 int target_set_state = 0;
-
+// dimensions
 int k = 0; // Sampling step
-int n = 8; // Number of states
-int m = 4; // Number of measurements
-int j = 2; // Number of inputs
-int T = 2; // Sliding window size (samples)
-int sigma = 100; // kernel size mcckf
-
+int n = 12; // Number of states
+int m = 6; // Number of measurements
+int j = 4; // Number of inputs
+int T = 1000; // Sliding window size (samples)
+int sigma = 1; // kernel size mcckf
+// reference signal
 float target_x;
 float target_y;
 float target_z;
 float target_psi;
-
+// errors
 float x_error=0;
 float y_error=0;
-
 // control inputs
 float roll_cmd = 0;
 float pitch_cmd = 0;
 float yaw_cmd = 0;
 float z_cmd = 0;
-
+float yaw_init = 0;
 double dt,dt1;
 ros::Time start_, end_,s1,e1;
 
@@ -103,8 +100,10 @@ Eigen::VectorXf y(m); // Measurement vector
 Eigen::VectorXf ref(j); // Target reference vector
 
 void lqg();
-Eigen::MatrixXf sliding_window(Eigen::VectorXf y, int i);
-Eigen::VectorXf setTarget(float x, float y, float z, float psi);
+void sliding_window(Eigen::VectorXf y, int k);
+void setTarget(float x, float y, float z, float psi);
+
+bool set_local_position();
 
 void imu_callback(const sensor_msgs::Imu::ConstPtr& msg);
 
@@ -174,7 +173,8 @@ class KalmanFilter {
 		/* Do prediction (INPUT) */
 		void predict ( Eigen::VectorXf U );
 		/* Do correction */
-		void correct ( Eigen::VectorXf Y); // add Eigen::MatrixXf _R for dynamic R matrix
+		void correct ( Eigen::VectorXf Y); 
+		void correct ( Eigen::VectorXf Y, Eigen::MatrixXf _R); // add Eigen::MatrixXf _R for dynamic R matrix
 };
 
 class MCCKalmanFilter {
@@ -214,7 +214,8 @@ class MCCKalmanFilter {
 		/* Do prediction (INPUT) */
 		void predict ( Eigen::VectorXf U);
 		/* Do correction */
-		void correct ( Eigen::VectorXf Y );
+		void correct ( Eigen::VectorXf Y);
+		void correct ( Eigen::VectorXf Y, Eigen::MatrixXf _R);
 
 };
 
