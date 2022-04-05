@@ -11,6 +11,7 @@ Prerequisites:
 
 **cite** This project contains the implementation for our [paper](https://research.aalto.fi/files/51270426/ELEC_Makridis_Charalambous_Towards_Robust_Onboard_IWCMC2020_acceptedauthormanuscript.pdf).  If you find this code useful in your research, please consider citing:
 
+```bibtex
 @inproceedings{makridis2020towards,
   title={Towards robust onboard control for quadrotors via ultra-wideband-based localization},
   author={Makridis, Evagoras and Charalambous, Themistoklis},
@@ -19,3 +20,4 @@ Prerequisites:
   year={2020},
   organization={IEEE}
 }
+```
